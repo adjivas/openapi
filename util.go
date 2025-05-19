@@ -2,7 +2,10 @@ package openapi
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math/rand"
+	"net/netip"
 	"strconv"
 	"strings"
 
@@ -164,13 +167,13 @@ func init() {
 	ServiceNfType[models.ServiceName_NHSS_IMS_UEAU] = models.NrfNfManagementNfType_UDM
 }
 
-func ServiceBaseUri(srvName models.ServiceName) string {
-	return ServiceUri(srvName, "")
+func ServiceBaseUri(serviceName models.ServiceName) string {
+	return ServiceUri(serviceName, "")
 }
 
-func ServiceUri(srvName models.ServiceName, apiPrefix string) string {
+func ServiceUri(serviceName models.ServiceName, apiPrefix string) string {
 	suffix := ""
-	switch srvName {
+	switch serviceName {
 	case models.ServiceName_NNRF_NFM:
 		suffix = ServiceBaseURI_NNRF_NFM_v1
 	case models.ServiceName_NNRF_DISC:
@@ -344,54 +347,124 @@ func ApiVersion(name models.ServiceName) string {
 	return ""
 }
 
+func GetManagementNfUri(nfProfile *models.NrfNfManagementNfProfile) (string, error) {
+	nfUri := ""
+	for index := range nfProfile.NfServices {
+		service := nfProfile.NfServices[index]
+		if service.Fqdn != "" {
+			nfUri = string(service.Scheme) + "://" + service.Fqdn
+		} else if nfProfile.Fqdn != "" {
+			nfUri = string(service.Scheme) + "://" + nfProfile.Fqdn
+		} else if len(service.IpEndPoints) != 0 {
+			nfUri = GetManagementNFServiceUri(nfProfile, service)
+		}
+		if nfUri != "" {
+			break
+		}
+	}
+	if nfUri == "" {
+		return "", errors.New("no uri found")
+	}
+	return nfUri, nil
+}
+
+func GetManagementNFServiceUri(
+	nfProfile *models.NrfNfManagementNfProfile, service models.NrfNfManagementNfService,
+) string {
+	if nfProfile == nil {
+		return ""
+	}
+
+	nfUri := ""
+	if service.ApiPrefix != "" {
+		nfUri = service.ApiPrefix
+	} else if service.Fqdn != "" {
+		nfUri = string(service.Scheme) + "://" + service.Fqdn
+	} else if nfProfile.Fqdn != "" {
+		nfUri = string(service.Scheme) + "://" + nfProfile.Fqdn
+	} else if len(service.IpEndPoints) != 0 {
+		ipEndPointsLen := len(service.IpEndPoints)
+		ipEndPointSelect := rand.Intn(ipEndPointsLen)
+		ipEndPoint := service.IpEndPoints[ipEndPointSelect]
+
+		if ipEndPoint.Ipv6Address != "" {
+			nfUri = getUriFromIpEndPoint(service.Scheme, ipEndPoint.Ipv6Address, ipEndPoint.Port)
+		} else if ipEndPoint.Ipv4Address != "" {
+			nfUri = getUriFromIpEndPoint(service.Scheme, ipEndPoint.Ipv4Address, ipEndPoint.Port)
+		} else if len(nfProfile.Ipv6Addresses) != 0 {
+			ipAddr6Len := len(nfProfile.Ipv6Addresses)
+			ipAddr6Select := rand.Intn(ipAddr6Len)
+			ipAddr6 := nfProfile.Ipv6Addresses[ipAddr6Select]
+			nfUri = getUriFromIpEndPoint(service.Scheme, ipAddr6, ipEndPoint.Port)
+		} else if len(nfProfile.Ipv4Addresses) != 0 {
+			ipAddr4Len := len(nfProfile.Ipv4Addresses)
+			ipAddr4Select := rand.Intn(ipAddr4Len)
+			ipAddr4 := nfProfile.Ipv6Addresses[ipAddr4Select]
+			nfUri = getUriFromIpEndPoint(service.Scheme, ipAddr4, ipEndPoint.Port)
+		}
+	}
+	return nfUri
+}
+
 func GetServiceNfProfileAndUri(
 	nfInstances []models.NrfNfDiscoveryNfProfile,
-	srvName models.ServiceName,
+	serviceName models.ServiceName,
 ) (*models.NrfNfDiscoveryNfProfile, string, error) {
 	// select the first ServiceName
 	// TODO: select base on other info
-	var nfProf *models.NrfNfDiscoveryNfProfile
-	var uri string
+	var nfProfile *models.NrfNfDiscoveryNfProfile
+	uri := ""
 	for i := range nfInstances {
-		nfProf = &nfInstances[i]
-		uri = GetNFServiceUri(nfProf, srvName)
+		nfProfile = &nfInstances[i]
+		uri = GetNFServiceUri(nfProfile, serviceName)
 		if uri != "" {
 			break
 		}
 	}
 	if uri == "" {
-		return nil, "", fmt.Errorf("no uri for %s found", srvName)
+		return nil, "", errors.New("no uri found")
 	}
-	return nfProf, uri, nil
+	return nfProfile, uri, nil
 }
 
 // Returns NF Uri derived from NfProfile with corresponding service
 func GetNFServiceUri(
-	nfProf *models.NrfNfDiscoveryNfProfile,
-	srvName models.ServiceName,
+	nfProfile *models.NrfNfDiscoveryNfProfile,
+	serviceName models.ServiceName,
 ) string {
-	if nfProf == nil {
+	if nfProfile == nil {
 		return ""
 	}
 
 	nfUri := ""
-	for _, srv := range nfProf.NfServices {
-		if srv.ServiceName == srvName &&
-			srv.NfServiceStatus == models.NfServiceStatus_REGISTERED {
-			if srv.ApiPrefix != "" {
-				nfUri = srv.ApiPrefix
-			} else if srv.Fqdn != "" {
-				nfUri = string(srv.Scheme) + "://" + srv.Fqdn
-			} else if nfProf.Fqdn != "" {
-				nfUri = string(srv.Scheme) + "://" + nfProf.Fqdn
-			} else if len(srv.IpEndPoints) != 0 {
-				// Select the first IpEndPoint
-				// TODO: select others when failure
-				point := (srv.IpEndPoints)[0]
-				if point.Ipv4Address != "" {
-					nfUri = getUriFromIpEndPoint(srv.Scheme, point.Ipv4Address, point.Port)
-				} else if len(nfProf.Ipv4Addresses) != 0 {
-					nfUri = getUriFromIpEndPoint(srv.Scheme, nfProf.Ipv4Addresses[0], point.Port)
+	for _, service := range nfProfile.NfServices {
+		if service.ServiceName == serviceName &&
+			service.NfServiceStatus == models.NfServiceStatus_REGISTERED {
+			if service.ApiPrefix != "" {
+				nfUri = service.ApiPrefix
+			} else if service.Fqdn != "" {
+				nfUri = string(service.Scheme) + "://" + service.Fqdn
+			} else if nfProfile.Fqdn != "" {
+				nfUri = string(service.Scheme) + "://" + nfProfile.Fqdn
+			} else if len(service.IpEndPoints) != 0 {
+				ipEndPointsLen := len(service.IpEndPoints)
+				ipEndPointSelect := rand.Intn(ipEndPointsLen)
+				ipEndPoint := service.IpEndPoints[ipEndPointSelect]
+
+				if ipEndPoint.Ipv6Address != "" {
+					nfUri = getUriFromIpEndPoint(service.Scheme, ipEndPoint.Ipv6Address, ipEndPoint.Port)
+				} else if ipEndPoint.Ipv4Address != "" {
+					nfUri = getUriFromIpEndPoint(service.Scheme, ipEndPoint.Ipv4Address, ipEndPoint.Port)
+				} else if len(nfProfile.Ipv6Addresses) != 0 {
+					ipAddr6Len := len(nfProfile.Ipv6Addresses)
+					ipAddr6Select := rand.Intn(ipAddr6Len)
+					ipAddr6 := nfProfile.Ipv6Addresses[ipAddr6Select]
+					nfUri = getUriFromIpEndPoint(service.Scheme, ipAddr6, ipEndPoint.Port)
+				} else if len(nfProfile.Ipv4Addresses) != 0 {
+					ipAddr4Len := len(nfProfile.Ipv4Addresses)
+					ipAddr4Select := rand.Intn(ipAddr4Len)
+					ipAddr4 := nfProfile.Ipv6Addresses[ipAddr4Select]
+					nfUri = getUriFromIpEndPoint(service.Scheme, ipAddr4, ipEndPoint.Port)
 				}
 			}
 		}
@@ -402,19 +475,27 @@ func GetNFServiceUri(
 	return nfUri
 }
 
-func getUriFromIpEndPoint(scheme models.UriScheme, ipv4Address string, port int32) string {
-	uri := ""
-	if port != 0 {
-		uri = string(scheme) + "://" + ipv4Address + ":" + strconv.Itoa(int(port))
-	} else {
+func getUriFromIpEndPoint(scheme models.UriScheme, addrStr string, port int32) string {
+	portSelected := uint16(port)
+	if port == 0 {
 		switch scheme {
-		case models.UriScheme_HTTP:
-			uri = string(scheme) + "://" + ipv4Address + ":80"
 		case models.UriScheme_HTTPS:
-			uri = string(scheme) + "://" + ipv4Address + ":443"
+			portSelected = 443
+		case models.UriScheme_HTTP:
+			portSelected = 80
+		default:
+			return ""
 		}
 	}
-	return uri
+
+	addr, err := netip.ParseAddr(addrStr)
+	if err != nil {
+		return ""
+	}
+
+	bindAddr := netip.AddrPortFrom(addr, portSelected).String()
+
+	return string(scheme) + "://" + bindAddr
 }
 
 func SnssaiEqualFold(s, t models.Snssai) bool {
