@@ -1,4 +1,4 @@
-module github.com/adjivas/openapi
+module github.com/free5gc/openapi
 
 go 1.21
 
