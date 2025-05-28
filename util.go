@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/netip"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -540,4 +541,11 @@ func PlmnIdJsonToModels(plmnIdJson []byte) (*models.PlmnId, error) {
 		return nil, err
 	}
 	return &plmnId, nil
+}
+
+func getRespStatusCode(response *http.Response) int {
+	if response != nil {
+		return response.StatusCode
+	}
+	return 0
 }
