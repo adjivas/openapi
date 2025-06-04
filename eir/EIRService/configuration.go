@@ -1,6 +1,7 @@
 package EIRSelection
 
 import (
+	"github.com/free5gc/openapi"
 	"net/http"
 	"strings"
 )
@@ -12,6 +13,7 @@ type Configuration struct {
 	defaultHeader map[string]string
 	userAgent     string
 	httpClient    *http.Client
+	MetricsHook   openapi.RequestMetricsHook
 }
 
 func NewConfiguration() *Configuration {
@@ -20,6 +22,7 @@ func NewConfiguration() *Configuration {
 		url:           "{apiRoot}/n5g-eir-eic/v1",
 		defaultHeader: make(map[string]string),
 		userAgent:     "OpenAPI-Generator/1.0.0/go",
+		MetricsHook:   nil, // no-op unless the caller sets it
 	}
 	return cfg
 }
@@ -67,4 +70,12 @@ func (c *Configuration) HTTPClient() *http.Client {
 
 func (c *Configuration) SetHTTPClient(client *http.Client) {
 	c.httpClient = client
+}
+
+func (c *Configuration) Metrics() openapi.RequestMetricsHook {
+	return c.MetricsHook
+}
+
+func (c *Configuration) SetMetrics(h openapi.RequestMetricsHook) {
+	c.MetricsHook = h
 }
