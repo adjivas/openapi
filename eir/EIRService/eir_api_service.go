@@ -17,18 +17,18 @@ var (
 
 type EIRApiService service
 
-type EIREquipementStatusGetResponse struct {
+type EIREquipmentStatusGetResponse struct {
 	Status string `json:"status"`
 }
 
-func (a *EIRApiService) EIREquipementStatusGet(ctx context.Context, imei string) (*EIREquipementStatusGetResponse, error) {
+func (a *EIRApiService) EIREquipmentStatusGet(ctx context.Context, imei string) (*EIREquipmentStatusGetResponse, error) {
 	var (
 		localVarHTTPMethod   = strings.ToUpper("Get")
 		localVarPostBody     interface{}
 		localVarFormFileName string
 		localVarFileName     string
 		localVarFileBytes    []byte
-		localVarReturnValue  EIREquipementStatusGetResponse
+		localVarReturnValue  EIREquipmentStatusGetResponse
 	)
 
 	// create path and map variables

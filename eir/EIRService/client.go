@@ -5,7 +5,7 @@ type APIClient struct {
 	common service
 
 	// API Services
-	EIREquipementStatusApi *EIRApiService
+	EIREquipmentStatusApi *EIRApiService
 }
 
 type service struct {
@@ -20,7 +20,7 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 	c.common.client = c
 
 	// API Services
-	c.EIREquipementStatusApi = (*EIRApiService)(&c.common)
+	c.EIREquipmentStatusApi = (*EIRApiService)(&c.common)
 
 	return c
 }
