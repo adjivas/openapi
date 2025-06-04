@@ -32,7 +32,7 @@ func (a *EIRApiService) EIREquipementStatusGet(ctx context.Context, imei string)
 	)
 
 	// create path and map variables
-	localVarPath := a.client.cfg.BasePath() + "/equipement-status?pei=" + imei
+	localVarPath := a.client.cfg.BasePath() + "/equipment-status?pei=" + imei
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
